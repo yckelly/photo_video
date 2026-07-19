@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# 用 venv 裡的 python 跑 publish_month.py。
+# 這樣就不用每次都打一長串 ~/Desktop/photo/.venv/bin/python3，
+# 也不會不小心用到系統 python（那個沒裝 google 套件）。
+set -euo pipefail
+
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+VENV_PY="${PUBLISH_MONTH_PYTHON:-$HOME/Desktop/photo/.venv/bin/python3}"
+
+if [[ ! -x "$VENV_PY" ]]; then
+    cat >&2 <<EOF
+找不到 venv 的 python: $VENV_PY
+
+先建一個：
+  python3 -m venv ~/Desktop/photo/.venv
+  ~/Desktop/photo/.venv/bin/python3 -m pip install google-api-python-client google-auth-oauthlib
+EOF
+    exit 1
+fi
+
+exec "$VENV_PY" "$HERE/publish_month.py" "$@"
