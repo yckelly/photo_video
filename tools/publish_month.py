@@ -171,11 +171,28 @@ def save_state(state_file: Path, state: dict) -> None:
 
 # ---------------------------------------------------------------- YouTube
 
+def require_google_libs():
+    """延後 import，讓 --dry-run 在沒裝套件的機器上也能跑。"""
+    try:
+        from google.auth.transport.requests import Request
+        from google.oauth2.credentials import Credentials
+        from google_auth_oauthlib.flow import InstalledAppFlow
+        from googleapiclient.discovery import build
+    except ModuleNotFoundError as e:
+        sys.exit(
+            f"\n缺少套件 '{e.name}'，目前這個 Python 是 {sys.executable}\n\n"
+            "Homebrew 的 Python 升級版本時會把舊版的套件清掉，所以要用 venv：\n\n"
+            "  python3 -m venv ~/Desktop/photo/.venv\n"
+            "  ~/Desktop/photo/.venv/bin/python3 -m pip install "
+            "google-api-python-client google-auth-oauthlib\n\n"
+            "之後改用 venv 裡的 python 跑這支 script：\n\n"
+            "  ~/Desktop/photo/.venv/bin/python3 tools/publish_month.py ...\n"
+        )
+    return Request, Credentials, InstalledAppFlow, build
+
+
 def get_authenticated_service(secrets_dir: Path):
-    from google.auth.transport.requests import Request
-    from google.oauth2.credentials import Credentials
-    from google_auth_oauthlib.flow import InstalledAppFlow
-    from googleapiclient.discovery import build
+    Request, Credentials, InstalledAppFlow, build = require_google_libs()
 
     token_file = secrets_dir / "token.json"
     client_secret_file = secrets_dir / "client_secret.json"

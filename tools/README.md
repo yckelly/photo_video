@@ -6,11 +6,30 @@
 
 ## 一、一次性設定（只做一次）
 
-### 1. 安裝套件
+### 1. 建 venv 並安裝套件
+
+**一定要用 venv。** Homebrew 的 Python 每次升級大版本（例如 3.13 → 3.14）都會把舊版的 `site-packages` 清掉，套件就這樣消失；而且 Homebrew Python 也擋掉直接 `pip3 install`（externally-managed）。
 
 ```bash
-python3 -m pip install google-api-python-client google-auth-oauthlib
+python3 -m venv ~/Desktop/photo/.venv
+~/Desktop/photo/.venv/bin/python3 -m pip install google-api-python-client google-auth-oauthlib
 ```
+
+之後**都用 venv 裡的 python 跑這支 script**：
+
+```bash
+~/Desktop/photo/.venv/bin/python3 tools/publish_month.py ...
+```
+
+嫌太長可以設個 alias，加進 `~/.zshrc`：
+
+```bash
+alias publish-month='~/Desktop/photo/.venv/bin/python3 ~/Desktop/photo/photo_video/tools/publish_month.py'
+```
+
+這樣就變成 `publish-month "20260519 - 20260616" --album-url ...`。
+
+> `--dry-run` 不需要這些套件（import 是延後做的），所以用系統 python3 跑 dry-run 也不會錯 —— 但正式上傳一定要用 venv 的。
 
 ### 2. 確認憑證位置
 
