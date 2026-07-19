@@ -1,0 +1,9 @@
+# 憑證，絕對不要進 repo
+client_secret.json
+token.json
+upload_cache.json
+.publish_state.json
+
+__pycache__/
+*.pyc
+.DS_Store
