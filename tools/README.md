@@ -80,35 +80,41 @@ git clone https://github.com/yckelly/photo_video.git ~/Desktop/photo/photo_video
 - **縮圖連結**：從相簿挑一張當封面，複製圖片網址，長得像 `https://lh3.googleusercontent.com/pw/AP1Gcz...=w100`
   - 結尾的 `=w100` 是寬度，既有的項目混用 `=w75`（直式照片）和 `=w100`（橫式照片），照你習慣挑
 
-### 步驟 3：先 dry-run 確認
+### 步驟 3：跑起來，它會一項一項問你
+
+**不用記任何參數，直接跑就好：**
 
 ```bash
 cd ~/Desktop/photo/photo_video
-
-./tools/publish-month "20260519 - 20260616" \
-    --album-url "https://photos.app.goo.gl/xxxx" \
-    --thumb-url "https://lh3.googleusercontent.com/pw/AP1Gcz...=w100" \
-    --dry-run
+./tools/publish-month
 ```
 
-`--dry-run` **不上傳、不改任何檔案**，只印出：
+它會依序問：
 
-- 推導出來的標題與影片頁檔名
-- 自動算出來的年齡字串 ← **重點確認這行**
-- 哪些影片沒被列進順序檔
-- 完整的上傳順序（照 `filenames.txt`）
-- 該月 html 是否已經存在
+1. **選月資料夾** —— 列出最近 10 個，標示哪些已經發佈過，預設選最新的那個「還沒發佈過」的
+2. **確認年齡** —— 自動算好給你看，不對的話可以自己輸入
+3. **相簿連結**
+4. **縮圖連結**
+5. **縮圖的照片檔名**（當 `alt` 用，例如 `DSC06009`）
+6. **要不要 push**
 
-### 步驟 4：正式跑
+問完會把要做的事全部列給你看（標題、影片頁檔名、年齡、沒列進順序檔的影片、完整上傳順序、該月 html 是否已存在），**最後再問一次「開始上傳嗎？」，預設是「否」**。到這一步為止都還沒有動任何東西，Ctrl-C 隨時可以退出。
 
-確認沒問題後，拿掉 `--dry-run`、加上 `--push`：
+也就是說問答模式本身就內建了 dry-run 的確認，不用先跑一次 `--dry-run` 再跑一次正式的。
+
+### 步驟 4（選用）：直接下參數
+
+已經很熟、或想寫進別的 script 的話，也可以一次給齊：
 
 ```bash
 ./tools/publish-month "20260519 - 20260616" \
     --album-url "https://photos.app.goo.gl/xxxx" \
     --thumb-url "https://lh3.googleusercontent.com/pw/AP1Gcz...=w100" \
+    --thumb-alt "DSC06009" \
     --push
 ```
+
+加 `--dry-run` 就只檢查不執行。
 
 會依序做：
 
@@ -126,14 +132,14 @@ cd ~/Desktop/photo/photo_video
 
 | 參數 | 說明 |
 |---|---|
-| `月資料夾名稱` | 唯一的必填參數，例如 `"20260519 - 20260616"`。記得加引號（名稱有空格）|
+| `月資料夾名稱` | 例如 `"20260519 - 20260616"`，記得加引號（名稱有空格）。**不給就進入問答模式** |
 | `--album-url` | Google Photos 相簿連結 |
 | `--thumb-url` | 縮圖連結 |
+| `--thumb-alt` | 縮圖的照片檔名，當 `alt` 用，例如 `DSC06009` |
 | `--dry-run` | 只檢查與列出，不上傳、不改檔 |
 | `--push` | commit 後直接 push（不加就只 commit，你自己再推）|
 | `--subtitle` | 覆寫年齡字串，預設從生日自動算 |
 | `--title` | 覆寫標題，預設從資料夾名推導 |
-| `--thumb-alt` | 縮圖 alt 文字，預設用月份區間 |
 | `--only` | 只跑某些步驟，逗號分隔：`upload,page,index` |
 | `--photo-root` | 照片根目錄，預設 `~/Desktop/photo` |
 | `--secrets-dir` | 憑證位置，預設同 `--photo-root` |

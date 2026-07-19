@@ -103,6 +103,84 @@ def parse_folder_name(folder_name: str):
     return f"{start_s} - {end_s}", f"{start_s}_{end_s}", end
 
 
+def list_month_folders(photo_root: Path, repo: Path) -> list:
+    """列出看起來像日期區間的月資料夾，新的排前面，並標示是否已發佈過。"""
+    found = []
+    for d in photo_root.iterdir():
+        if not d.is_dir():
+            continue
+        _, slug, _ = parse_folder_name(d.name)
+        if slug is None:
+            continue
+        found.append((d, slug, (repo / f"{slug}.html").exists()))
+    return sorted(found, key=lambda t: t[0].name, reverse=True)
+
+
+# ---------------------------------------------------------------- 問答模式
+
+def ask(question: str, default: str = None, required: bool = True) -> str:
+    suffix = f" [{default}]" if default else ""
+    while True:
+        answer = input(f"{question}{suffix}: ").strip()
+        if not answer and default is not None:
+            return default
+        if answer or not required:
+            return answer
+        print("  這項不能空白。")
+
+
+def confirm(question: str, default: bool = True) -> bool:
+    suffix = "[Y/n]" if default else "[y/N]"
+    answer = input(f"{question} {suffix} ").strip().lower()
+    if not answer:
+        return default
+    return answer in ("y", "yes")
+
+
+def prompt_for_inputs(args, photo_root: Path, repo: Path) -> None:
+    """沒給月資料夾時，一項一項問。直接改寫 args。"""
+    print("=" * 60)
+    print("每月相簿發佈 —— 一項一項問，Enter 用預設值，Ctrl-C 隨時中斷")
+    print("=" * 60)
+    print()
+
+    folders = list_month_folders(photo_root, repo)
+    if not folders:
+        sys.exit(f"{photo_root} 底下找不到任何 'YYYYMMDD - YYYYMMDD' 格式的資料夾")
+
+    print("選擇月資料夾：")
+    for i, (d, _, published) in enumerate(folders[:10], 1):
+        mark = "（已發佈過）" if published else ""
+        print(f"  {i:2d}. {d.name} {mark}")
+    print()
+
+    # 預設選最新的、還沒發佈過的那個
+    default_idx = next((i for i, (_, _, pub) in enumerate(folders[:10], 1) if not pub), 1)
+    while True:
+        choice = ask("編號", default=str(default_idx))
+        if choice.isdigit() and 1 <= int(choice) <= min(10, len(folders)):
+            args.month = folders[int(choice) - 1][0].name
+            break
+        print("  請輸入清單上的編號。")
+
+    _, _, end_date = parse_folder_name(args.month)
+    print(f"\n→ {args.month}")
+    if end_date:
+        auto = build_subtitle(end_date)
+        print(f"→ 自動算出的年齡：{auto}")
+        if not confirm("  這樣對嗎？", default=True):
+            args.subtitle = ask("  自己輸入年齡字串")
+    print()
+
+    args.album_url = ask("Google Photos 相簿連結")
+    args.thumb_url = ask("縮圖連結（lh3.googleusercontent.com/...）")
+    args.thumb_alt = ask("縮圖的照片檔名，當 alt 用（例如 DSC06009）")
+    print()
+
+    args.push = confirm("上傳完直接 push 到 GitHub？", default=True)
+    print()
+
+
 def resolve_month_dir(arg: str, photo_root: Path) -> Path:
     """接受資料夾名稱或完整路徑。"""
     p = Path(arg).expanduser()
@@ -383,10 +461,12 @@ def main():
         description="每月：上傳影片到 YouTube、產生影片頁、更新 index.html",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.add_argument("month", help="月資料夾名稱，例如 '20260519 - 20260616'（也接受完整路徑）")
+    parser.add_argument("month", nargs="?",
+                        help="月資料夾名稱，例如 '20260519 - 20260616'（也接受完整路徑）。"
+                             "不給的話就進入問答模式，一項一項問")
     parser.add_argument("--album-url", help="Google Photos 相簿連結")
     parser.add_argument("--thumb-url", help="縮圖連結（lh3.googleusercontent.com/...=w100）")
-    parser.add_argument("--thumb-alt", help="縮圖 alt 文字，預設用月份區間")
+    parser.add_argument("--thumb-alt", help="縮圖的照片檔名，當 alt 用，例如 DSC06009")
     parser.add_argument("--title", help="覆寫標題，預設從資料夾名推導")
     parser.add_argument("--subtitle", help="覆寫年齡字串，預設從生日自動算")
     parser.add_argument("--only", help="只跑某些步驟，逗號分隔: upload,page,index")
@@ -405,6 +485,13 @@ def main():
 
     repo = args.repo
     secrets_dir = args.secrets_dir or args.photo_root
+
+    interactive = args.month is None
+    if interactive:
+        if args.only or args.dry_run:
+            sys.exit("問答模式不能跟 --only / --dry-run 一起用，請直接給月資料夾名稱")
+        prompt_for_inputs(args, args.photo_root, repo)
+
     month_dir = resolve_month_dir(args.month, args.photo_root)
 
     title, slug, end_date = parse_folder_name(month_dir.name)
@@ -439,11 +526,20 @@ def main():
         sys.exit("順序檔是空的")
 
     if "index" in steps:
-        if not args.album_url or not args.thumb_url:
-            sys.exit("更新 index.html 需要 --album-url 與 --thumb-url"
-                     "（或用 --only upload,page 先跳過這步）")
+        missing = [
+            flag for flag, value in (
+                ("--album-url", args.album_url),
+                ("--thumb-url", args.thumb_url),
+                ("--thumb-alt", args.thumb_alt),
+            ) if not value
+        ]
+        if missing:
+            sys.exit(
+                f"更新 index.html 需要 {'、'.join(missing)}\n"
+                "（不給月資料夾名稱就會進入問答模式，會一項一項問你）"
+            )
 
-    if args.dry_run:
+    if args.dry_run or interactive:
         print(f"預計依序上傳 {len(files)} 支影片：")
         for i, f in enumerate(files, 1):
             print(f"  {i:3d}. {f.name}")
@@ -452,8 +548,16 @@ def main():
             print(f"\n其中 {sum(1 for f in files if f.name in already)} 支已經上傳過，會跳過。")
         if page_path.exists():
             print(f"\n注意：{page_path.name} 已經存在，正式跑會覆蓋。")
+
+    if args.dry_run:
         print("\n(--dry-run：沒有上傳、沒有修改任何檔案)")
         return
+
+    if interactive:
+        print()
+        if not confirm("以上都對，開始上傳嗎？", default=False):
+            sys.exit("已中止，什麼都沒做。")
+        print()
 
     if page_path.exists() and "page" in steps:
         ans = input(f"{page_path.name} 已經存在，要覆蓋嗎？[y/N] ").strip().lower()
@@ -482,7 +586,7 @@ def main():
         block = build_index_block(
             title, slug, subtitle,
             args.album_url.strip(), args.thumb_url.strip(),   # 貼上來的網址常帶換行
-            (args.thumb_alt or title).strip(),
+            args.thumb_alt.strip(),
         )
         index_path.write_text(update_index(index_path, block, slug), encoding="utf-8")
         print(f"已更新 {index_path}")
