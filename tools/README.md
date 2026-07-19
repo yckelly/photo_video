@@ -143,6 +143,16 @@ python3 tools/publish_month.py "20260519 - 20260616" \
 
 ## 四、常見狀況
 
+### `Token has been expired or revoked`
+
+Script 會自動偵測並重新跑一次授權（開瀏覽器），照著點完就會繼續上傳，不用手動刪 `token.json`。
+
+**為什麼會過期**：如果 Google Cloud Console 的「OAuth 同意畫面」還停在 **「測試中 / Testing」** 狀態，refresh token **七天**就會失效。你是每月才跑一次，等於每次都會遇到。
+
+一勞永逸的話，到 Google Cloud Console → OAuth 同意畫面 → 把發布狀態改成 **「正式版 / In production」**。之後 refresh token 就不會固定七天過期。改完第一次授權時可能會看到「這個應用程式未經 Google 驗證」的警告 —— 因為 `youtube.upload` 屬於敏感權限，而這個 app 只有你自己用、沒送審。點「進階」→「繼續」即可。
+
+（不改也行，只是每個月要多點幾下重新授權。）
+
 ### 上傳到一半中斷了（每日上限 / 網路斷線）
 
 **直接重跑同一條指令就好。** 每上傳成功一支就會記進月資料夾的 `傳/影片/.publish_state.json`，重跑會自動跳過已傳的，從卡住那支繼續，不會重複上傳。

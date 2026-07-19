@@ -174,6 +174,7 @@ def save_state(state_file: Path, state: dict) -> None:
 def require_google_libs():
     """延後 import，讓 --dry-run 在沒裝套件的機器上也能跑。"""
     try:
+        from google.auth.exceptions import RefreshError
         from google.auth.transport.requests import Request
         from google.oauth2.credentials import Credentials
         from google_auth_oauthlib.flow import InstalledAppFlow
@@ -188,11 +189,11 @@ def require_google_libs():
             "之後改用 venv 裡的 python 跑這支 script：\n\n"
             "  ~/Desktop/photo/.venv/bin/python3 tools/publish_month.py ...\n"
         )
-    return Request, Credentials, InstalledAppFlow, build
+    return RefreshError, Request, Credentials, InstalledAppFlow, build
 
 
 def get_authenticated_service(secrets_dir: Path):
-    Request, Credentials, InstalledAppFlow, build = require_google_libs()
+    RefreshError, Request, Credentials, InstalledAppFlow, build = require_google_libs()
 
     token_file = secrets_dir / "token.json"
     client_secret_file = secrets_dir / "client_secret.json"
@@ -200,15 +201,24 @@ def get_authenticated_service(secrets_dir: Path):
     creds = None
     if token_file.exists():
         creds = Credentials.from_authorized_user_file(str(token_file), SCOPES)
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
+
+    # token 過期時先試著用 refresh_token 續期
+    if creds and not creds.valid and creds.expired and creds.refresh_token:
+        try:
             creds.refresh(Request())
-        else:
-            if not client_secret_file.exists():
-                sys.exit(f"找不到 {client_secret_file}，用 --secrets-dir 指到正確位置")
-            flow = InstalledAppFlow.from_client_secrets_file(str(client_secret_file), SCOPES)
-            creds = flow.run_local_server(port=0)
-        token_file.write_text(creds.to_json(), encoding="utf-8")
+        except RefreshError as e:
+            # 常見於 OAuth 同意畫面還停在「測試中」：refresh token 七天就失效
+            print(f"token 已失效（{e.args[0]}），重新授權一次…")
+            creds = None
+
+    # 沒有 token、或續期失敗，就跑一次完整授權（會開瀏覽器）
+    if not creds or not creds.valid:
+        if not client_secret_file.exists():
+            sys.exit(f"找不到 {client_secret_file}，用 --secrets-dir 指到正確位置")
+        flow = InstalledAppFlow.from_client_secrets_file(str(client_secret_file), SCOPES)
+        creds = flow.run_local_server(port=0)
+
+    token_file.write_text(creds.to_json(), encoding="utf-8")
     return build("youtube", "v3", credentials=creds)
 
 
