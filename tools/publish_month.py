@@ -470,8 +470,9 @@ def main():
 
     if "index" in steps:
         block = build_index_block(
-            title, slug, subtitle, args.album_url, args.thumb_url,
-            args.thumb_alt or title,
+            title, slug, subtitle,
+            args.album_url.strip(), args.thumb_url.strip(),   # 貼上來的網址常帶換行
+            (args.thumb_alt or title).strip(),
         )
         index_path.write_text(update_index(index_path, block, slug), encoding="utf-8")
         print(f"已更新 {index_path}")
